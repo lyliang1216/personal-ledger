@@ -1,0 +1,17 @@
+{
+  "name": "Personal Ledger",
+  "appid": "__UNI__PERSONAL_LEDGER",
+  "description": "个人账本微信小程序",
+  "versionName": "0.1.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "mp-weixin": {
+    "appid": "",
+    "setting": {
+      "urlCheck": false,
+      "minified": true
+    },
+    "usingComponents": true
+  },
+  "vueVersion": "3"
+}

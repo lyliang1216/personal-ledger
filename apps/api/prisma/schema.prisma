@@ -1,0 +1,288 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum TransactionSource {
+  MANUAL
+  ALIPAY
+  WECHAT
+  JD
+  TAOBAO
+  OTHER
+}
+
+enum AccountType {
+  CASH
+  WECHAT
+  ALIPAY
+  BANK_CARD
+  CREDIT_CARD
+  JD
+  OTHER
+}
+
+enum ImportTaskStatus {
+  PENDING
+  PARSING
+  PREVIEW
+  IMPORTING
+  COMPLETED
+  FAILED
+}
+
+enum ImportRecordStatus {
+  PENDING
+  READY
+  DUPLICATE
+  IGNORED
+  IMPORTED
+  ERROR
+}
+
+model User {
+  id                       String                    @id @default(uuid()) @db.Uuid
+  nickname                 String                    @db.VarChar(100)
+  username                 String?                   @unique @db.VarChar(100)
+  passwordHash             String?                   @db.VarChar(255)
+  avatarUrl                String?                   @db.VarChar(2048)
+  phone                    String?                   @unique @db.VarChar(32)
+  status                   UserStatus                @default(ACTIVE)
+  role                     UserRole                  @default(USER)
+  createdAt                DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime                  @updatedAt @db.Timestamptz(3)
+  ledgers                  Ledger[]
+  accounts                 Account[]
+  categories               Category[]
+  tags                     Tag[]
+  transactions             Transaction[]
+  transactionSourceRecords TransactionSourceRecord[]
+  importTasks              ImportTask[]
+  importRecords            ImportRecord[]
+}
+
+model Ledger {
+  id            String         @id @default(uuid()) @db.Uuid
+  userId        String         @db.Uuid
+  name          String         @db.VarChar(100)
+  description   String?        @db.VarChar(500)
+  isDefault     Boolean        @default(false)
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  transactions  Transaction[]
+  importRecords ImportRecord[]
+
+  @@unique([id, userId])
+  @@unique([userId, name])
+  @@index([userId, isDefault])
+}
+
+model Account {
+  id            String         @id @default(uuid()) @db.Uuid
+  userId        String         @db.Uuid
+  name          String         @db.VarChar(100)
+  type          AccountType
+  description   String?        @db.VarChar(500)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  transactions  Transaction[]
+  importRecords ImportRecord[]
+
+  @@unique([id, userId])
+  @@unique([userId, name])
+  @@index([userId, isActive])
+}
+
+model Category {
+  id            String          @id @default(uuid()) @db.Uuid
+  userId        String          @db.Uuid
+  parentId      String?         @db.Uuid
+  name          String          @db.VarChar(100)
+  type          TransactionType
+  icon          String?         @db.VarChar(100)
+  sort          Int             @default(0)
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime        @updatedAt @db.Timestamptz(3)
+  user          User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  parent        Category?       @relation("CategoryHierarchy", fields: [parentId, userId], references: [id, userId], onDelete: Restrict)
+  children      Category[]      @relation("CategoryHierarchy")
+  transactions  Transaction[]
+  importRecords ImportRecord[]
+
+  @@unique([id, userId])
+  @@index([userId, type, isActive])
+  @@index([userId, parentId, sort])
+}
+
+model Tag {
+  id               String            @id @default(uuid()) @db.Uuid
+  userId           String            @db.Uuid
+  name             String            @db.VarChar(100)
+  description      String?           @db.VarChar(500)
+  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(3)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  transactionTags  TransactionTag[]
+  importRecordTags ImportRecordTag[]
+
+  @@unique([id, userId])
+  @@unique([userId, name])
+}
+
+model Transaction {
+  id              String                    @id @default(uuid()) @db.Uuid
+  userId          String                    @db.Uuid
+  type            TransactionType
+  amount          Decimal                   @db.Decimal(19, 4)
+  transactionTime DateTime                  @db.Timestamptz(3)
+  merchant        String?                   @db.VarChar(255)
+  description     String?                   @db.Text
+  remark          String?                   @db.Text
+  accountId       String?                   @db.Uuid
+  categoryId      String?                   @db.Uuid
+  ledgerId        String                    @db.Uuid
+  createdAt       DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                  @updatedAt @db.Timestamptz(3)
+  user            User                      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  account         Account?                  @relation(fields: [accountId, userId], references: [id, userId], onDelete: Restrict)
+  category        Category?                 @relation(fields: [categoryId, userId], references: [id, userId], onDelete: Restrict)
+  ledger          Ledger                    @relation(fields: [ledgerId, userId], references: [id, userId], onDelete: Restrict)
+  transactionTags TransactionTag[]
+  sourceRecords   TransactionSourceRecord[]
+
+  @@unique([id, userId])
+  @@index([userId, transactionTime])
+  @@index([userId, ledgerId, transactionTime])
+  @@index([userId, categoryId, transactionTime])
+  @@index([userId, accountId, transactionTime])
+}
+
+model TransactionSourceRecord {
+  id                    String            @id @default(uuid()) @db.Uuid
+  userId                String            @db.Uuid
+  transactionId         String            @db.Uuid
+  source                TransactionSource
+  sourceTransactionId   String?           @db.VarChar(255)
+  sourceOrderId         String?           @db.VarChar(255)
+  sourceTransactionTime DateTime          @db.Timestamptz(3)
+  sourceAmount          Decimal           @db.Decimal(19, 4)
+  sourceStatus          String?           @db.VarChar(255)
+  sourceCategory        String?           @db.VarChar(255)
+  paymentMethod         String?           @db.VarChar(255)
+  fingerprint           String?           @db.VarChar(128)
+  rawData               Json?             @db.JsonB
+  createdAt             DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime          @updatedAt @db.Timestamptz(3)
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  transaction           Transaction       @relation(fields: [transactionId, userId], references: [id, userId], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@index([userId, source, sourceTransactionId])
+  @@index([userId, source, sourceOrderId])
+  @@index([userId, source, sourceTransactionTime, sourceAmount])
+  @@index([userId, fingerprint])
+}
+
+model TransactionTag {
+  userId        String      @db.Uuid
+  transactionId String      @db.Uuid
+  tagId         String      @db.Uuid
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+  transaction   Transaction @relation(fields: [transactionId, userId], references: [id, userId], onDelete: Cascade)
+  tag           Tag         @relation(fields: [tagId, userId], references: [id, userId], onDelete: Cascade)
+
+  @@id([transactionId, tagId])
+  @@index([userId, tagId])
+}
+
+model ImportTask {
+  id             String            @id @default(uuid()) @db.Uuid
+  userId         String            @db.Uuid
+  source         TransactionSource
+  fileName       String            @db.VarChar(255)
+  status         ImportTaskStatus  @default(PENDING)
+  totalCount     Int               @default(0)
+  validCount     Int               @default(0)
+  duplicateCount Int               @default(0)
+  ignoredCount   Int               @default(0)
+  importedCount  Int               @default(0)
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime          @updatedAt @db.Timestamptz(3)
+  user           User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  records        ImportRecord[]
+
+  @@unique([id, userId])
+  @@index([userId, createdAt])
+  @@index([userId, status])
+}
+
+model ImportRecord {
+  id                  String             @id @default(uuid()) @db.Uuid
+  importTaskId        String             @db.Uuid
+  userId              String             @db.Uuid
+  source              TransactionSource
+  sourceTransactionId String?            @db.VarChar(255)
+  sourceOrderId       String?            @db.VarChar(255)
+  transactionTime     DateTime           @db.Timestamptz(3)
+  amount              Decimal            @db.Decimal(19, 4)
+  type                TransactionType
+  merchant            String?            @db.VarChar(255)
+  description         String?            @db.Text
+  remark              String?            @db.Text
+  categoryId          String?            @db.Uuid
+  ledgerId            String?            @db.Uuid
+  accountId           String?            @db.Uuid
+  fingerprint         String?            @db.VarChar(128)
+  rawData             Json               @db.JsonB
+  status              ImportRecordStatus @default(PENDING)
+  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime           @updatedAt @db.Timestamptz(3)
+  importTask          ImportTask         @relation(fields: [importTaskId, userId], references: [id, userId], onDelete: Cascade)
+  user                User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  category            Category?          @relation(fields: [categoryId, userId], references: [id, userId], onDelete: Restrict)
+  ledger              Ledger?            @relation(fields: [ledgerId, userId], references: [id, userId], onDelete: Restrict)
+  account             Account?           @relation(fields: [accountId, userId], references: [id, userId], onDelete: Restrict)
+  importRecordTags    ImportRecordTag[]
+
+  @@unique([id, userId])
+  @@index([importTaskId, status])
+  @@index([userId, transactionTime])
+  @@index([userId, source, sourceTransactionId])
+  @@index([userId, fingerprint])
+}
+
+model ImportRecordTag {
+  userId         String       @db.Uuid
+  importRecordId String       @db.Uuid
+  tagId          String       @db.Uuid
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  importRecord   ImportRecord @relation(fields: [importRecordId, userId], references: [id, userId], onDelete: Cascade)
+  tag            Tag          @relation(fields: [tagId, userId], references: [id, userId], onDelete: Cascade)
+
+  @@id([importRecordId, tagId])
+  @@index([userId, tagId])
+}

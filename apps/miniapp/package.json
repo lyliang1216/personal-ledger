@@ -1,0 +1,27 @@
+{
+  "name": "@ledger/miniapp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "uni -p mp-weixin",
+    "dev:mp-weixin": "uni -p mp-weixin",
+    "build": "uni build -p mp-weixin",
+    "build:mp-weixin": "uni build -p mp-weixin",
+    "lint": "eslint src --max-warnings=0",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "3.0.0-alpha-5020720260921001",
+    "@dcloudio/uni-components": "3.0.0-alpha-5020720260921001",
+    "@dcloudio/uni-mp-weixin": "3.0.0-alpha-5020720260921001",
+    "vue": "3.4.21"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "3.4.31",
+    "@dcloudio/vite-plugin-uni": "3.0.0-alpha-5020720260921001",
+    "less": "^4.4.1",
+    "vite": "5.2.8",
+    "vue-tsc": "^2.2.10"
+  }
+}
