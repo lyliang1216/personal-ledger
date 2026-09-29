@@ -60,6 +60,27 @@ enum ImportRecordStatus {
   ERROR
 }
 
+enum ImportReconcileStatus {
+  NEW
+  UNCHANGED
+  CHANGED
+  AUTO_MATCH
+  POSSIBLE_MATCH
+  UNSUPPORTED
+}
+
+enum ImportRecordDecision {
+  PENDING
+  CREATE_NEW
+  LINK_EXISTING
+  APPLY_CHANGE
+}
+
+enum SourceRecordKind {
+  NORMAL
+  REFUND
+}
+
 model User {
   id                       String                    @id @default(uuid()) @db.Uuid
   nickname                 String                    @db.VarChar(100)
@@ -154,25 +175,26 @@ model Tag {
 }
 
 model Transaction {
-  id              String                    @id @default(uuid()) @db.Uuid
-  userId          String                    @db.Uuid
-  type            TransactionType
-  amount          Decimal                   @db.Decimal(19, 4)
-  transactionTime DateTime                  @db.Timestamptz(3)
-  merchant        String?                   @db.VarChar(255)
-  description     String?                   @db.Text
-  remark          String?                   @db.Text
-  accountId       String?                   @db.Uuid
-  categoryId      String?                   @db.Uuid
-  ledgerId        String                    @db.Uuid
-  createdAt       DateTime                  @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime                  @updatedAt @db.Timestamptz(3)
-  user            User                      @relation(fields: [userId], references: [id], onDelete: Restrict)
-  account         Account?                  @relation(fields: [accountId, userId], references: [id, userId], onDelete: Restrict)
-  category        Category?                 @relation(fields: [categoryId, userId], references: [id, userId], onDelete: Restrict)
-  ledger          Ledger                    @relation(fields: [ledgerId, userId], references: [id, userId], onDelete: Restrict)
-  transactionTags TransactionTag[]
-  sourceRecords   TransactionSourceRecord[]
+  id                     String                    @id @default(uuid()) @db.Uuid
+  userId                 String                    @db.Uuid
+  type                   TransactionType
+  amount                 Decimal                   @db.Decimal(19, 4)
+  transactionTime        DateTime                  @db.Timestamptz(3)
+  merchant               String?                   @db.VarChar(255)
+  description            String?                   @db.Text
+  remark                 String?                   @db.Text
+  accountId              String?                   @db.Uuid
+  categoryId             String?                   @db.Uuid
+  ledgerId               String                    @db.Uuid
+  createdAt              DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                  @updatedAt @db.Timestamptz(3)
+  user                   User                      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  account                Account?                  @relation(fields: [accountId, userId], references: [id, userId], onDelete: Restrict)
+  category               Category?                 @relation(fields: [categoryId, userId], references: [id, userId], onDelete: Restrict)
+  ledger                 Ledger                    @relation(fields: [ledgerId, userId], references: [id, userId], onDelete: Restrict)
+  transactionTags        TransactionTag[]
+  sourceRecords          TransactionSourceRecord[]
+  candidateImportRecords ImportRecord[]            @relation("ImportRecordCandidateTransaction")
 
   @@unique([id, userId])
   @@index([userId, transactionTime])
@@ -182,23 +204,25 @@ model Transaction {
 }
 
 model TransactionSourceRecord {
-  id                    String            @id @default(uuid()) @db.Uuid
-  userId                String            @db.Uuid
-  transactionId         String            @db.Uuid
-  source                TransactionSource
-  sourceTransactionId   String?           @db.VarChar(255)
-  sourceOrderId         String?           @db.VarChar(255)
-  sourceTransactionTime DateTime          @db.Timestamptz(3)
-  sourceAmount          Decimal           @db.Decimal(19, 4)
-  sourceStatus          String?           @db.VarChar(255)
-  sourceCategory        String?           @db.VarChar(255)
-  paymentMethod         String?           @db.VarChar(255)
-  fingerprint           String?           @db.VarChar(128)
-  rawData               Json?             @db.JsonB
-  createdAt             DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt             DateTime          @updatedAt @db.Timestamptz(3)
-  user                  User              @relation(fields: [userId], references: [id], onDelete: Restrict)
-  transaction           Transaction       @relation(fields: [transactionId, userId], references: [id, userId], onDelete: Cascade)
+  id                     String            @id @default(uuid()) @db.Uuid
+  userId                 String            @db.Uuid
+  transactionId          String            @db.Uuid
+  source                 TransactionSource
+  sourceTransactionId    String?           @db.VarChar(255)
+  sourceOrderId          String?           @db.VarChar(255)
+  sourceTransactionTime  DateTime          @db.Timestamptz(3)
+  sourceAmount           Decimal           @db.Decimal(19, 4)
+  sourceStatus           String?           @db.VarChar(255)
+  sourceCategory         String?           @db.VarChar(255)
+  paymentMethod          String?           @db.VarChar(255)
+  sourceRecordKind       SourceRecordKind  @default(NORMAL)
+  fingerprint            String?           @db.VarChar(128)
+  rawData                Json?             @db.JsonB
+  createdAt              DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime          @updatedAt @db.Timestamptz(3)
+  user                   User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  transaction            Transaction       @relation(fields: [transactionId, userId], references: [id, userId], onDelete: Cascade)
+  candidateImportRecords ImportRecord[]    @relation("ImportRecordCandidateSourceRecord")
 
   @@index([transactionId])
   @@index([userId, source, sourceTransactionId])
@@ -230,6 +254,7 @@ model ImportTask {
   duplicateCount Int               @default(0)
   ignoredCount   Int               @default(0)
   importedCount  Int               @default(0)
+  errorMessage   String?           @db.Text
   createdAt      DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime          @updatedAt @db.Timestamptz(3)
   user           User              @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -241,38 +266,56 @@ model ImportTask {
 }
 
 model ImportRecord {
-  id                  String             @id @default(uuid()) @db.Uuid
-  importTaskId        String             @db.Uuid
-  userId              String             @db.Uuid
-  source              TransactionSource
-  sourceTransactionId String?            @db.VarChar(255)
-  sourceOrderId       String?            @db.VarChar(255)
-  transactionTime     DateTime           @db.Timestamptz(3)
-  amount              Decimal            @db.Decimal(19, 4)
-  type                TransactionType
-  merchant            String?            @db.VarChar(255)
-  description         String?            @db.Text
-  remark              String?            @db.Text
-  categoryId          String?            @db.Uuid
-  ledgerId            String?            @db.Uuid
-  accountId           String?            @db.Uuid
-  fingerprint         String?            @db.VarChar(128)
-  rawData             Json               @db.JsonB
-  status              ImportRecordStatus @default(PENDING)
-  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime           @updatedAt @db.Timestamptz(3)
-  importTask          ImportTask         @relation(fields: [importTaskId, userId], references: [id, userId], onDelete: Cascade)
-  user                User               @relation(fields: [userId], references: [id], onDelete: Restrict)
-  category            Category?          @relation(fields: [categoryId, userId], references: [id, userId], onDelete: Restrict)
-  ledger              Ledger?            @relation(fields: [ledgerId, userId], references: [id, userId], onDelete: Restrict)
-  account             Account?           @relation(fields: [accountId, userId], references: [id, userId], onDelete: Restrict)
-  importRecordTags    ImportRecordTag[]
+  id                      String                   @id @default(uuid()) @db.Uuid
+  importTaskId            String                   @db.Uuid
+  userId                  String                   @db.Uuid
+  source                  TransactionSource
+  sourceTransactionId     String?                  @db.VarChar(255)
+  sourceOrderId           String?                  @db.VarChar(255)
+  sourceTransactionTime   DateTime?                @db.Timestamptz(3)
+  sourceAmount            Decimal?                 @db.Decimal(19, 4)
+  sourceStatus            String?                  @db.VarChar(255)
+  sourceCategory          String?                  @db.VarChar(255)
+  paymentMethod           String?                  @db.VarChar(255)
+  sourceRecordKind        SourceRecordKind?
+  transactionTime         DateTime?                @db.Timestamptz(3)
+  amount                  Decimal?                 @db.Decimal(19, 4)
+  type                    TransactionType?
+  merchant                String?                  @db.VarChar(255)
+  description             String?                  @db.Text
+  remark                  String?                  @db.Text
+  categoryId              String?                  @db.Uuid
+  ledgerId                String?                  @db.Uuid
+  accountId               String?                  @db.Uuid
+  fingerprint             String?                  @db.VarChar(128)
+  rawData                 Json                     @db.JsonB
+  status                  ImportRecordStatus       @default(PENDING)
+  reconcileStatus         ImportReconcileStatus?
+  decision                ImportRecordDecision     @default(PENDING)
+  candidateTransactionId  String?                  @db.Uuid
+  candidateSourceRecordId String?                  @db.Uuid
+  reconcileReason         String?                  @db.Text
+  changeReason            String?                  @db.Text
+  parserWarnings          String[]                 @default([])
+  createdAt               DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime                 @updatedAt @db.Timestamptz(3)
+  importTask              ImportTask               @relation(fields: [importTaskId, userId], references: [id, userId], onDelete: Cascade)
+  user                    User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  category                Category?                @relation(fields: [categoryId, userId], references: [id, userId], onDelete: Restrict)
+  ledger                  Ledger?                  @relation(fields: [ledgerId, userId], references: [id, userId], onDelete: Restrict)
+  account                 Account?                 @relation(fields: [accountId, userId], references: [id, userId], onDelete: Restrict)
+  candidateTransaction    Transaction?             @relation("ImportRecordCandidateTransaction", fields: [candidateTransactionId], references: [id], onDelete: SetNull)
+  candidateSourceRecord   TransactionSourceRecord? @relation("ImportRecordCandidateSourceRecord", fields: [candidateSourceRecordId], references: [id], onDelete: SetNull)
+  importRecordTags        ImportRecordTag[]
 
   @@unique([id, userId])
   @@index([importTaskId, status])
+  @@index([importTaskId, reconcileStatus])
   @@index([userId, transactionTime])
   @@index([userId, source, sourceTransactionId])
   @@index([userId, fingerprint])
+  @@index([userId, candidateTransactionId])
+  @@index([userId, candidateSourceRecordId])
 }
 
 model ImportRecordTag {
