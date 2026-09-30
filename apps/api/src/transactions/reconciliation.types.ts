@@ -1,4 +1,8 @@
-import type { TransactionSource, TransactionType } from '../generated/prisma/enums'
+import type {
+  SourceRecordKind,
+  TransactionSource,
+  TransactionType,
+} from '../generated/prisma/enums'
 
 export enum ReconciliationStatus {
   NEW = 'NEW',
@@ -19,6 +23,7 @@ export interface ReconciliationSourceInput {
   sourceStatus?: string | null
   sourceCategory?: string | null
   paymentMethod?: string | null
+  sourceRecordKind?: SourceRecordKind | null
   fingerprint: string | null
   rawData: unknown | null
   isSupported?: boolean
@@ -29,4 +34,6 @@ export interface ReconciliationResult {
   transactionId?: string
   sourceRecordId?: string
   candidateTransactionIds: string[]
+  reason?: string
+  changeReason?: string
 }

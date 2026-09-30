@@ -9,6 +9,7 @@
     "build": "prisma generate && nest build",
     "lint": "eslint src prisma/seed.ts --max-warnings=0",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.seed.json --noEmit",
+    "test:imports": "tsx --test test/imports/*.spec.ts",
     "prisma:format": "prisma format",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
@@ -26,7 +27,10 @@
     "argon2": "^0.45.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "csv-parse": "^7.0.3",
     "dotenv": "^18.0.4",
+    "exceljs": "^4.4.0",
+    "iconv-lite": "^0.7.3",
     "pg": "^8.23.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
