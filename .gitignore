@@ -5,6 +5,7 @@ dist
 !.env.example
 coverage
 .turbo
+.pnpm-store
 apps/api/src/generated/prisma
 .DS_Store
 .idea

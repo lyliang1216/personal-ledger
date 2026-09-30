@@ -10,6 +10,7 @@ import {
   Descriptions,
   Divider,
   Drawer,
+  Empty,
   Form,
   Input,
   InputNumber,
@@ -20,6 +21,7 @@ import {
   Radio,
   Result,
   Select,
+  Skeleton,
   Space,
   Spin,
   Switch,
@@ -47,6 +49,7 @@ app.use(DatePicker)
 app.use(Descriptions)
 app.use(Divider)
 app.use(Drawer)
+app.use(Empty)
 app.use(Form)
 app.use(Input)
 app.use(InputNumber)
@@ -57,6 +60,7 @@ app.use(Popconfirm)
 app.use(Radio)
 app.use(Result)
 app.use(Select)
+app.use(Skeleton)
 app.use(Space)
 app.use(Spin)
 app.use(Switch)
