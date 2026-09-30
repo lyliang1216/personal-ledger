@@ -8,6 +8,7 @@ import { CategoriesModule } from './categories/categories.module'
 import { LedgersModule } from './ledgers/ledgers.module'
 import { ImportsModule } from './imports/imports.module'
 import { PrismaModule } from './prisma/prisma.module'
+import { StatisticsModule } from './statistics/statistics.module'
 import { TagsModule } from './tags/tags.module'
 import { TransactionsModule } from './transactions/transactions.module'
 
@@ -21,6 +22,7 @@ import { TransactionsModule } from './transactions/transactions.module'
     AccountsModule,
     TransactionsModule,
     ImportsModule,
+    StatisticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
