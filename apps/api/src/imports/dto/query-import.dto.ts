@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer'
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator'
+import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator'
 
 import {
   ImportRecordStatus,
@@ -48,6 +48,22 @@ export class QueryImportRecordDto {
   @IsOptional()
   @IsString()
   keyword?: string
+
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string
+
+  @IsOptional()
+  @IsUUID()
+  tagId?: string
+
+  @IsOptional()
+  @IsUUID()
+  ledgerId?: string
+
+  @IsOptional()
+  @IsUUID()
+  accountId?: string
 
   @Type(() => Number)
   @IsOptional()

@@ -7,6 +7,7 @@ import {
 
 import { Prisma } from '../generated/prisma/client'
 import {
+  ImportRecordDecision,
   ImportRecordStatus,
   ImportReconcileStatus,
   ImportTaskStatus,
@@ -170,8 +171,40 @@ export class ImportsService {
       take: query.pageSize,
     })
     const total = await this.prismaService.importTask.count({ where })
+    const taskIds = items.map((item) => item.id)
+    const statusGroups = taskIds.length
+      ? await this.prismaService.importRecord.groupBy({
+          by: ['importTaskId', 'status'],
+          where: { userId, importTaskId: { in: taskIds } },
+          _count: { _all: true },
+        })
+      : []
+    const reconcileGroups = taskIds.length
+      ? await this.prismaService.importRecord.groupBy({
+          by: ['importTaskId', 'reconcileStatus'],
+          where: { userId, importTaskId: { in: taskIds } },
+          _count: { _all: true },
+        })
+      : []
 
-    return { items, total, page: query.page, pageSize: query.pageSize }
+    return {
+      items: items.map((item) => ({
+        ...item,
+        statusCounts: Object.fromEntries(
+          statusGroups
+            .filter((group) => group.importTaskId === item.id)
+            .map((group) => [group.status, group._count._all]),
+        ),
+        reconcileCounts: Object.fromEntries(
+          reconcileGroups
+            .filter((group) => group.importTaskId === item.id)
+            .map((group) => [group.reconcileStatus || 'UNSET', group._count._all]),
+        ),
+      })),
+      total,
+      page: query.page,
+      pageSize: query.pageSize,
+    }
   }
 
   async findOne(userId: string, id: string) {
@@ -207,6 +240,10 @@ export class ImportsService {
       importTaskId,
       ...(query.status ? { status: query.status } : {}),
       ...(query.reconcileStatus ? { reconcileStatus: query.reconcileStatus } : {}),
+      ...(query.categoryId ? { categoryId: query.categoryId } : {}),
+      ...(query.tagId ? { importRecordTags: { some: { userId, tagId: query.tagId } } } : {}),
+      ...(query.ledgerId ? { ledgerId: query.ledgerId } : {}),
+      ...(query.accountId ? { accountId: query.accountId } : {}),
       ...(keyword
         ? {
             OR: [
@@ -375,37 +412,48 @@ export class ImportsService {
     accountId: string | null,
     record: NormalizedImportRecord,
     outcome: ImportReconciliationOutcome | null,
-  ): Prisma.ImportRecordCreateManyInput => ({
-    importTaskId,
-    userId,
-    source: record.source,
-    sourceTransactionId: record.sourceTransactionId,
-    sourceOrderId: record.sourceOrderId,
-    sourceTransactionTime: record.sourceTransactionTime,
-    sourceAmount: record.sourceAmount ? new Prisma.Decimal(record.sourceAmount) : null,
-    sourceStatus: record.sourceStatus,
-    sourceCategory: record.sourceCategory,
-    paymentMethod: record.paymentMethod,
-    sourceRecordKind: record.sourceRecordKind,
-    transactionTime: record.transactionTime,
-    amount: record.amount ? new Prisma.Decimal(record.amount) : null,
-    type: record.type,
-    merchant: record.merchant,
-    description: record.description,
-    remark: record.remark,
-    categoryId: null,
-    ledgerId,
-    accountId,
-    fingerprint: record.fingerprint,
-    rawData: record.rawData,
-    status: record.status,
-    reconcileStatus: outcome?.reconcileStatus || record.reconcileStatus,
-    candidateTransactionId: outcome?.candidateTransactionId || null,
-    candidateSourceRecordId: outcome?.candidateSourceRecordId || null,
-    reconcileReason: outcome?.reconcileReason || record.normalizationReason,
-    changeReason: outcome?.changeReason || null,
-    parserWarnings: record.parserWarnings,
-  })
+  ): Prisma.ImportRecordCreateManyInput => {
+    const reconcileStatus = outcome?.reconcileStatus || record.reconcileStatus
+    const decision =
+      reconcileStatus === ImportReconcileStatus.NEW
+        ? ImportRecordDecision.CREATE_NEW
+        : reconcileStatus === ImportReconcileStatus.AUTO_MATCH
+          ? ImportRecordDecision.LINK_EXISTING
+          : ImportRecordDecision.PENDING
+
+    return {
+      importTaskId,
+      userId,
+      source: record.source,
+      sourceTransactionId: record.sourceTransactionId,
+      sourceOrderId: record.sourceOrderId,
+      sourceTransactionTime: record.sourceTransactionTime,
+      sourceAmount: record.sourceAmount ? new Prisma.Decimal(record.sourceAmount) : null,
+      sourceStatus: record.sourceStatus,
+      sourceCategory: record.sourceCategory,
+      paymentMethod: record.paymentMethod,
+      sourceRecordKind: record.sourceRecordKind,
+      transactionTime: record.transactionTime,
+      amount: record.amount ? new Prisma.Decimal(record.amount) : null,
+      type: record.type,
+      merchant: record.merchant,
+      description: record.description,
+      remark: record.remark,
+      categoryId: null,
+      ledgerId,
+      accountId,
+      fingerprint: record.fingerprint,
+      rawData: record.rawData,
+      status: record.status,
+      reconcileStatus,
+      decision,
+      candidateTransactionId: outcome?.candidateTransactionId || null,
+      candidateSourceRecordId: outcome?.candidateSourceRecordId || null,
+      reconcileReason: outcome?.reconcileReason || record.normalizationReason,
+      changeReason: outcome?.changeReason || null,
+      parserWarnings: record.parserWarnings,
+    }
+  }
 
   private readonly getOwnedTask = async (userId: string, id: string) => {
     const task = await this.prismaService.importTask.findFirst({ where: { id, userId } })

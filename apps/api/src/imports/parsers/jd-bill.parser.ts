@@ -101,8 +101,10 @@ export class JdBillParser implements BillParser {
 
     if (flowValue === '收入') type = TransactionType.INCOME
     else if (flowValue === '支出') type = TransactionType.EXPENSE
-    else if (flowValue === '不计收支') status = ImportRecordStatus.IGNORED
-    else warnings.push(`京东发现未知收支类型：${flowValue}`)
+    else if (flowValue === '不计收支') {
+      status = ImportRecordStatus.IGNORED
+      if (amountResult?.isFullRefund) type = TransactionType.EXPENSE
+    } else warnings.push(`京东发现未知收支类型：${flowValue}`)
 
     if (!sourceTransactionTime) warnings.push(`京东发现未知交易时间格式：${timeValue}`)
     if (!amountResult) warnings.push(`京东发现未知金额格式：${amountValue}`)

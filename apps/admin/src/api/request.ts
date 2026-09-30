@@ -1,7 +1,8 @@
 import { getAccessToken, removeAccessToken } from '@/utils/auth-token'
 
-interface ErrorResponse {
+export interface ErrorResponse {
   message?: string | string[]
+  [key: string]: unknown
 }
 
 interface RequestOptions extends Omit<RequestInit, 'body'> {
@@ -14,25 +15,25 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    readonly data: ErrorResponse = {},
   ) {
     super(message)
     this.name = 'ApiError'
   }
 }
 
-const getErrorMessage = async (response: Response): Promise<string> => {
+const getErrorResponse = async (response: Response): Promise<ErrorResponse> => {
   try {
-    const errorResponse = (await response.json()) as ErrorResponse
-
-    if (Array.isArray(errorResponse.message)) {
-      return errorResponse.message.join('，')
-    }
-
-    return errorResponse.message || '请求失败'
+    return (await response.json()) as ErrorResponse
   } catch (_error) {
-    return '请求失败'
+    return {}
   }
 }
+
+const getErrorMessage = (errorResponse: ErrorResponse): string =>
+  Array.isArray(errorResponse.message)
+    ? errorResponse.message.join('，')
+    : errorResponse.message || '请求失败'
 
 const handleUnauthorized = (): void => {
   removeAccessToken()
@@ -49,9 +50,15 @@ export const request = async <T>(path: string, options: RequestOptions = {}): Pr
 
   const headers = new Headers(options.headers)
   const accessToken = getAccessToken()
+  const optionBody = options.body
+  const isFormData = optionBody instanceof FormData
+  let body: BodyInit | undefined
 
-  if (options.body !== undefined) {
+  if (optionBody !== undefined && !isFormData) {
     headers.set('Content-Type', 'application/json')
+    body = JSON.stringify(optionBody)
+  } else if (isFormData) {
+    body = optionBody
   }
 
   if (accessToken) {
@@ -61,7 +68,7 @@ export const request = async <T>(path: string, options: RequestOptions = {}): Pr
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...options,
     headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body,
   })
 
   if (response.status === 401) {
@@ -69,7 +76,8 @@ export const request = async <T>(path: string, options: RequestOptions = {}): Pr
   }
 
   if (!response.ok) {
-    throw new ApiError(response.status, await getErrorMessage(response))
+    const errorResponse = await getErrorResponse(response)
+    throw new ApiError(response.status, getErrorMessage(errorResponse), errorResponse)
   }
 
   if (response.status === 204) {

@@ -16,6 +16,7 @@ import type { AuthenticatedUser } from '../auth/auth.types'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
 import { QueryImportRecordDto, QueryImportTaskDto } from './dto/query-import.dto'
+import { ImportConfirmService } from './import-confirm.service'
 import { ImportUploadExceptionFilter } from './import-upload-exception.filter'
 import { ImportsService } from './imports.service'
 import type { UploadedBillFile } from './imports.types'
@@ -25,7 +26,10 @@ export const MAX_IMPORT_FILE_SIZE = 10 * 1024 * 1024
 @Controller('imports')
 @UseGuards(JwtAuthGuard)
 export class ImportsController {
-  constructor(private readonly importsService: ImportsService) {}
+  constructor(
+    private readonly importsService: ImportsService,
+    private readonly importConfirmService: ImportConfirmService,
+  ) {}
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMPORT_FILE_SIZE } }))
@@ -46,6 +50,11 @@ export class ImportsController {
     @Query() query: QueryImportRecordDto,
   ) {
     return this.importsService.findRecords(currentUser.userId, id, query)
+  }
+
+  @Post(':id/confirm')
+  confirm(@CurrentUser() currentUser: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.importConfirmService.confirm(currentUser.userId, id)
   }
 
   @Get(':id')
